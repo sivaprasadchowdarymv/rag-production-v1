@@ -94,6 +94,116 @@ def _words(text: str):
             _t.sleep(0.01)
 
 
+_VERDICT_TEXT = {
+    "verified": "every cited fact and number was found in the quoted passages",
+    "partially_verified": "most facts were found in the passages; some could only be partly confirmed",
+    "unverified": "some statements could not be confirmed in the passages, so read the evidence yourself",
+}
+_INPUT_FINDINGS = {
+    "pii": "personal data (for example a card or ID number) was found in your question and handled by the "
+           "privacy policy ({policy})",
+    "prompt_injection": "the text tried to change the assistant's rules or extract hidden information",
+    "harmful_content": "the request asked for harmful content ({cats})",
+    "topic": "the question is about a topic your organisation has restricted or that is outside the allowed scope",
+}
+
+
+def explain_result(result: QueryResult) -> List[tuple]:
+    """Plain-English story of how this answer was produced: [(icon, title, text)], built only from what
+    actually happened (security decisions, agent trace, retrieval debug, routing, verification)."""
+    out: List[tuple] = []
+    sec = result.security or {}
+    findings = [f for f in (sec.get("input") or {}).get("findings", []) if f.get("type") != "decision"]
+    if result.kind in ("blocked", "out_of_scope"):
+        why = "; ".join(_INPUT_FINDINGS.get(f.get("type"), f.get("type", "a safety rule")).format(
+            policy=f.get("policy", ""), cats=", ".join(f.get("categories", []))) for f in findings)
+        out.append(("🛡️", "Stopped by the safety check",
+                     f"Your question was checked on the server before anything else happened: {why or 'a policy rule matched'}. "
+                     "It was NOT sent to any AI model and no documents were searched. The event is recorded in the "
+                     "audit log."))
+        return out
+    if findings:
+        out.append(("🛡️", "Safety check: passed with a note",
+                    "; ".join(_INPUT_FINDINGS.get(f.get("type"), f.get("type", "")).format(
+                        policy=f.get("policy", ""), cats=", ".join(f.get("categories", []))) for f in findings) + "."))
+    else:
+        out.append(("🛡️", "Safety check: passed",
+                    "Your question was checked for instruction attacks, harmful requests, restricted topics and "
+                    "personal data. Nothing was found."))
+    trace = {t.get("agent", ""): t for t in result.agent_trace}
+    qu = trace.get("Query Understanding Agent")
+    if qu:
+        parts = dict(kv.split("=", 1) for kv in qu.get("summary", "").split("; ") if "=" in kv)
+        what = parts.get("intents", "").replace(",", ", ")
+        out.append(("🧠", "Understood the question",
+                    "Worked out what kind of request this is" + (f" ({parts['task']})" if parts.get("task") else "")
+                    + (f" and what to look for: {what}" if what else "")
+                    + (f", then rewrote it into {parts['variants']} search phrasing(s)" if parts.get("variants") else "")
+                    + "."))
+    rd = result.retrieval_debug or {}
+    docs = sorted({s.doc_name for s in result.sources if s.doc_name})
+    queries = rd.get("queries") or []
+    cands = rd.get("candidates") or []
+    search = (f"Searched with {len(queries)} phrasing(s)" if queries else "Searched your documents") + \
+        " using meaning (dense vectors), keywords (BM25) and approximate text matching, merged the rankings (RRF)"
+    search += " and re-ranked the best candidates" if any(c.get("rerank") is not None for c in cands) else ""
+    search += f". {len(result.sources)} passage(s) were cited" + (f" from {', '.join(docs)}." if docs else ".")
+    out.append(("🔎", "Found the evidence", search))
+    reasoning = trace.get("Reasoning Agent", {})
+    if result.used_llm and result.model:
+        r = result.routing or {}
+        why = []
+        if r.get("mode"):
+            why.append(f"mode {r['mode']}")
+        if r.get("sensitive"):
+            why.append("confidential documents, so only local models were allowed")
+        if r.get("strategy"):
+            why.append(f"{r['strategy']} strategy")
+        out.append(("✍️", "Wrote the answer",
+                    f"The AI model {result.model.split('/', 1)[-1]} ({result.provider or 'local'}) wrote the answer "
+                    f"using ONLY the evidence above" + (f" — chosen because of {', '.join(why)}" if why else "") + "."))
+    else:
+        out.append(("📄", "Showed the evidence (no AI model)",
+                    "No AI model answered (" + (reasoning.get("summary") or "none connected") + "), so the app shows "
+                    "the best-matching passages instead of a written answer. Connect Ollama or a cloud key to get "
+                    "written answers."))
+    v = result.verification or {}
+    if v.get("verdict"):
+        extra = []
+        if v.get("unsupported_claims"):
+            extra.append(f"{len(v['unsupported_claims'])} unsupported statement(s)")
+        if v.get("miscited"):
+            extra.append(f"{len(v['miscited'])} wrong citation(s)")
+        out.append(("✅" if v["verdict"] == "verified" else "⚠️", "Checked the answer",
+                    f"The citation checker compared the answer with its sources: "
+                    f"{_VERDICT_TEXT.get(v['verdict'], v['verdict'])}" + (f" ({'; '.join(extra)})" if extra else "")
+                    + (". A second AI model also reviewed it." if v.get("llm_checked") else ".")))
+    qa = trace.get("Answer Quality Agent")
+    if qa:
+        action = "accept" if "accept" in qa.get("summary", "") else ("abstain" if "abstain" in qa.get("summary", "")
+                                                                       else "warn")
+        out.append(("🎯", "Quality decision", {
+            "accept": "The answer was good enough to show as is.",
+            "warn": "The answer is shown with a warning: double-check it against the evidence.",
+            "abstain": "The evidence was too weak, so the app refused to guess instead of inventing an answer.",
+        }[action]))
+    actions = (sec.get("output") or {}).get("actions") or []
+    if actions:
+        out.append(("🔒", "Final output check", "Before display the answer was cleaned: " + ", ".join(map(str, actions)) + "."))
+    return out
+
+
+def render_explanation(result: QueryResult) -> None:
+    steps = explain_result(result)
+    if not steps:
+        return
+    with st.expander("🧑‍🏫 How this answer was made (plain English)"):
+        for i, (icon, title, text) in enumerate(steps, 1):
+            st.markdown(f"**{i}. {icon} {title}** — {text}")
+        if result.request_id:
+            st.caption(f"Request id {result.request_id} (find it in the server logs and Agent traces).")
+
+
 def render_result(result: QueryResult, settings: Settings, show_evidence: bool = True, stream: bool = False) -> None:
     """`stream=True` types the (already verified and policy-checked) answer out word by word: tokens are never
     shown before verification and the output guard have run."""
@@ -101,6 +211,8 @@ def render_result(result: QueryResult, settings: Settings, show_evidence: bool =
         st.warning(w)
     if result.kind in ("blocked", "out_of_scope"):
         st.error(result.answer)
+        if st.session_state.get("beginner_help", True):
+            render_explanation(result)
         return
     if result.kind == "abstained":
         st.info(result.answer)
@@ -127,6 +239,8 @@ def render_result(result: QueryResult, settings: Settings, show_evidence: bool =
     if show_evidence and result.sources:
         with st.expander(f"Evidence ({len(result.sources)})"):
             render_sources(result.sources, settings)
+    if st.session_state.get("beginner_help", True):
+        render_explanation(result)
     trace = [s for s in result.steps if s.kind in _STAGE_ICON]
     if trace or result.agent_trace:
         with st.expander("Agent activity"):

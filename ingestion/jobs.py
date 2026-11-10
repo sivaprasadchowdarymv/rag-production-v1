@@ -61,6 +61,11 @@ class IngestionService:
     def ingest(self, data: bytes, filename: str, principal, sensitivity: str = "internal",
                allowed_roles: Sequence[str] = (), progress: ProgressFn = None, vision=None,
                job_id: Optional[str] = None) -> IngestResult:
+        from security.auth import has_permission
+
+        if not has_permission(principal, "upload"):  # enforced here, so UI, API and jobs all obey it
+            self.repo.audit(principal.tenant_id, principal.user_id, "upload_denied", sanitize_filename(filename))
+            raise IngestionError("Your role is not allowed to upload documents. Ask an editor or admin.")
         filename = sanitize_filename(filename)
         job_id = job_id or self.repo.create_job(principal.tenant_id, principal.user_id, filename).id
         t0 = time.time()

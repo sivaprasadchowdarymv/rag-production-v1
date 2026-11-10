@@ -38,6 +38,10 @@ OPENAI_API_KEY=...   ANTHROPIC_API_KEY=...   BEDROCK_REGION=us-east-1   OPENROUT
 
 Without any model the app still works: it shows the best matching evidence.
 
+**New here?** Open **🎓 Guide & Test Lab** in the app: setup check, how it works, one-click auto-checked tests on
+sample documents and a checklist. Every page has a *What is this page?* panel and every answer a *How this answer
+was made* explanation.
+
 ## Production (accounts, PostgreSQL, HTTPS)
 
 ```bash
@@ -54,7 +58,7 @@ REST API: `uvicorn api.main:app --port 8000` → `/docs` (OpenAPI), `/healthz`, 
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                   # 268 tests, offline (fake LLM server + fake embedder)
+python -m pytest                                   # 281 tests (4 need PostgreSQL), offline (fake LLM server + fake embedder)
 TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/rag_test python -m pytest   # + PostgreSQL variants
 ruff check . && bandit -c pyproject.toml -r . -ll && pip-audit -r requirements.lock
 python -m evaluation.benchmark [--generation]      # baseline vs upgraded report → data/evaluations/
@@ -80,7 +84,7 @@ python -m scripts.backup create|verify|restore
 
 ## Documentation
 
-[Beginner step-by-step guide (HTML)](docs/BEGINNER_GUIDE.html) · [User guide](docs/USER_GUIDE.md) · [Admin guide](docs/ADMIN_GUIDE.md) · [Deployment](docs/DEPLOYMENT_GUIDE.md) ·
+**[Complete handbook (HTML)](docs/HANDBOOK.html)** · [Workflow diagram](docs/WORKFLOW.png) · [Streamlit Cloud guide](docs/STREAMLIT_CLOUD_GUIDE.html) · [Beginner guide](docs/BEGINNER_GUIDE.html) · [User guide](docs/USER_GUIDE.md) · [Admin guide](docs/ADMIN_GUIDE.md) · [Deployment](docs/DEPLOYMENT_GUIDE.md) ·
 [Security audit](docs/SECURITY_AUDIT.md) · [Final test report](docs/FINAL_TEST_REPORT.md) ·
 [Production checklist](docs/PRODUCTION_READINESS_CHECKLIST.md) · [Changelog](CHANGELOG.md) ·
 [Execution tracker](PROJECT_EXECUTION_TRACKER.md) · Phase 0 audit: [docs/REPOSITORY_AUDIT.md](docs/REPOSITORY_AUDIT.md)

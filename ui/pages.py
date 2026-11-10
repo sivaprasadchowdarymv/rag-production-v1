@@ -21,6 +21,7 @@ from metrics import validation
 from metrics.rag_metrics import health_score
 from rag.models import AgentStep, QueryResult
 from rag.pdf_parser import PdfProcessingError
+from ui.help_content import page_help
 from ui import state, widgets
 
 MAX_QUESTION_CHARS = 1000
@@ -54,6 +55,11 @@ def _run_with_status(question: str, conv) -> QueryResult:
 
 
 def _upload_box(key: str, label: str = "Drop documents here") -> None:
+    from security.auth import has_permission
+
+    if not has_permission(state.principal(), "upload"):
+        st.caption("Your role can ask questions; uploading documents needs the editor or admin role.")
+        return
     s = state.settings()
     cols = st.columns([3, 1])
     uploads = cols[0].file_uploader(label, type=list(s.allowed_extensions), accept_multiple_files=True, key=key,
@@ -132,6 +138,9 @@ def sidebar() -> None:
                     st.session_state["conv_id"] = c.id
                     st.session_state.pop("last_result", None)
                     st.switch_page(st.session_state["pages"]["chat"])
+        st.session_state.setdefault("beginner_help", True)
+        st.toggle("🎓 Beginner help", key="beginner_help",
+                  help="Show 'What is this page?' panels and 'How this answer was made' explanations.")
         widgets.section("Answering")
         s = state.settings()
         modes = ["hybrid", "local", "cloud"]
@@ -207,15 +216,30 @@ def chat_page() -> None:
 
     if not indexes:
         widgets.hero("Ask your documents anything",
-                     "Upload a datasheet or technical PDF. Every answer cites the exact page, table or equation, "
-                     "and is checked before you see it.",
-                     [("Upload", "Add one or more PDFs below."), ("Ask", "Type a question in plain English."),
-                      ("Verify", "Open the evidence behind every answer.")])
+                     "Upload a document, ask in plain English, and get an answer that cites the exact page, table "
+                     "or equation — checked before you see it.",
+                     [("Upload", "Add your files below, or load the sample documents."),
+                      ("Ask", "Type a question in plain English."),
+                      ("Verify", "Open the evidence and 'How this answer was made' under every answer.")])
+        page_help("chat")
+        from security.auth import has_permission
+
+        c1, c2 = st.columns(2)
+        if has_permission(state.principal(), "upload") and c1.button(
+                "📥 First time? Load 4 sample documents", use_container_width=True, key="chat_samples",
+                help="A datasheet (PDF), pump manual (Word), stock list (Excel) and install guide (Markdown) with "
+                     "known answers, so you can see how everything works."):
+            from ui.guide import _load_samples
+            _load_samples()
+            st.rerun()
+        if c2.button("🎓 Open the Guide & Test Lab", use_container_width=True, key="chat_guide"):
+            st.switch_page(st.session_state["pages"]["guide"])
         _upload_box("chat_upload")
         if state.active_indexes():
             st.rerun()
         return
 
+    page_help("chat")
     chips = "".join(f'<span class="chip">📄 {widgets.esc(i.filename)}</span>' for i in indexes)
     st.markdown(f'<div class="meta" style="margin-bottom:.4rem">Answering from</div>{chips}', unsafe_allow_html=True)
 
@@ -266,6 +290,7 @@ def chat_page() -> None:
 # =============================================================================
 def library_page() -> None:
     st.title("📚 Documents")
+    page_help("library")
     st.caption("Documents in your workspace. They are reopened automatically next time"
                + (" (saved to Hugging Face)." if state.sync_manager().enabled else "; storage is temporary on this server."))
     _upload_box("library_upload", "Add documents")
@@ -314,6 +339,7 @@ def _library_admin() -> None:
 
 def validate_page() -> None:
     st.title("✅ Validate")
+    page_help("validate")
     st.caption("Check accuracy on YOUR documents. Questions are generated from your tables and equations with "
                "known answers; review them, then run the test.")
     indexes = state.active_indexes()
@@ -404,6 +430,7 @@ def _system_tab() -> None:
 
 def insights_page() -> None:
     st.title("📊 Insights")
+    page_help("insights")
     tab1, tab2, tab3, tab4 = st.tabs(["Quality", "Agent activity", "Feedback", "System"])
     with tab4:
         _system_tab()
@@ -488,6 +515,7 @@ def insights_page() -> None:
 # =============================================================================
 def settings_page() -> None:
     st.title("⚙️ Settings")
+    page_help("settings")
     t1, t2, t3, t4 = st.tabs(["Workspace & storage", "AI models", "Answer style", "Advanced"])
     s = state.settings()
     with t1:

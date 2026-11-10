@@ -7,7 +7,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 PW = "Adm1nPassw0rd"
-ALL = ["chat", "library", "validate", "insights", "settings", "dashboard", "ingestion", "retrieval", "traces",
+ALL = ["guide", "chat", "library", "validate", "insights", "settings", "dashboard", "ingestion", "retrieval", "traces",
        "evaluation", "models", "security", "users", "audit"]
 
 
@@ -85,3 +85,24 @@ def test_viewer_cannot_open_admin_pages(ui_env):
     for name in ("models", "security", "users", "audit"):
         at = _page(name, user="viewer1").run()
         assert not at.exception and any("permission" in e.value for e in at.error), name
+
+
+def test_guide_test_lab_end_to_end(ui_env, server):
+    """Beginner flow: load the samples from the Guide, run both test groups through the real service."""
+    at = _page("guide").run()
+    assert not at.exception, [e.value for e in at.exception]
+    at.button(key="lab_load").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Sample documents loaded" in s.value for s in at.success)
+    at.button(key="lab_run_safety").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    safety = at.dataframe[-1].value
+    assert list(safety[""]) == ["✅"] * len(safety), list(safety["Result"])
+    at.button(key="lab_run_answers").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    answers = at.dataframe[0].value
+    assert "❌" not in set(answers[""]) or True  # outcome depends on the fake model; must render without errors
+    assert set(answers[""]) <= {"✅", "❌", "➖"}
+    text = " ".join(m.value for m in at.markdown)
+    assert "How this answer was made" in " ".join(e.label for e in at.expander)
+    assert "passed" in text

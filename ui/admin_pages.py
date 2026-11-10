@@ -18,6 +18,7 @@ import streamlit as st
 
 from ops import telemetry
 from security.auth import AuthError, AuthService, has_permission
+from ui.help_content import page_help
 from ui import state, widgets
 
 
@@ -43,6 +44,7 @@ def _require(perm: str) -> bool:
 # =============================================================================
 def dashboard_page() -> None:
     st.title("🏠 Dashboard")
+    page_help("dashboard")
     s, p, repo = state.settings(), state.principal(), _repo()
     docs = [d for d in state.docs().values() if d["index"] is not None]
     sm = telemetry.summary()
@@ -84,6 +86,7 @@ def dashboard_page() -> None:
 # =============================================================================
 def ingestion_page() -> None:
     st.title("📥 Ingestion monitor")
+    page_help("ingestion")
     s, p, repo = state.settings(), state.principal(), _repo()
     if has_permission(p, "upload"):
         with st.expander("Background upload (large files)", expanded=False):
@@ -124,6 +127,7 @@ def retrieval_page() -> None:
     from retrieval.hybrid_search import MODES, HybridSearcher, MetadataFilter
 
     st.title("🔎 Retrieval debugger")
+    page_help("retrieval")
     s = state.settings()
     indexes = state.active_indexes()
     if not indexes:
@@ -168,6 +172,7 @@ def retrieval_page() -> None:
 # =============================================================================
 def traces_page() -> None:
     st.title("🧭 Agent execution traces")
+    page_help("traces")
     conv = state.current_conversation()
     answers = [m for m in conv.messages if m.role == "assistant" and m.result]
     if not answers:
@@ -208,6 +213,7 @@ def evaluation_page() -> None:
     from evaluation import benchmark
 
     st.title("🧪 Evaluation")
+    page_help("evaluation")
     s, p, repo = state.settings(), state.principal(), _repo()
     st.caption("Baseline (1.x retrieval) vs upgraded (2.0) on the controlled benchmark corpus. Metrics are computed "
                "from actual runs only; anything that cannot run here is reported as not run.")
@@ -260,6 +266,7 @@ def models_page() -> None:
     if not _require("manage_models"):
         return
     st.title("🤖 Model management")
+    page_help("models")
     s, p = state.settings(), state.principal()
     widgets.section("Providers")
     st.dataframe(pd.DataFrame([{"provider": x.label, "local": x.local, "configured": x.configured,
@@ -303,6 +310,7 @@ def security_page() -> None:
     if not _require("manage_policy"):
         return
     st.title("🛡️ Security & guardrails")
+    page_help("security")
     s, p, repo = state.settings(), state.principal(), _repo()
     engine = PolicyEngine(s, repo)
     cfg = engine.config(p.tenant_id)
@@ -361,6 +369,7 @@ def users_page() -> None:
     if not _require("manage_users"):
         return
     st.title("👥 Users & roles")
+    page_help("users")
     s, p, repo = state.settings(), state.principal(), _repo()
     if s.auth_mode != "users":
         st.info("User accounts are off (AUTH_MODE=none). Set AUTH_MODE=users with ADMIN_USERNAME and ADMIN_PASSWORD "
@@ -405,6 +414,7 @@ def audit_page() -> None:
     if not _require("view_audit"):
         return
     st.title("📜 Audit log")
+    page_help("audit")
     p, repo = state.principal(), _repo()
     events = repo.list_audit(p.tenant_id, limit=2000)
     actions = sorted({e.action for e in events})

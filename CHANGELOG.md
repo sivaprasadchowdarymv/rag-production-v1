@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.5 — 2026-11-10
+
+### Added
+- **🎓 Guide & Test Lab** page: setup check with fixes, upload and question pipelines explained step by step,
+  one-click Test Lab (sample documents with known answers; 6 answer tests and 5 safety tests run through the real
+  RAGService and are auto-checked: ✅ pass · ❌ fail · ➖ not tested, never a pass that was not checked), checklist.
+- **ℹ️ What is this page?** help on every page (what, how to use, what to try, expected result).
+- **🧑‍🏫 How this answer was made**: plain-English explanation under every answer, built from the real security
+  decisions, agent trace, retrieval, routing and verification. *Beginner help* toggle in the sidebar.
+- Chat onboarding: load the sample documents or open the guide when no documents exist.
+
 ## 2.0.0 — 2026-11-10
 
 Production platform release. All 1.x functionality preserved (96 original tests still pass unchanged in

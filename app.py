@@ -3,7 +3,7 @@ RAG∞ Ultimate — verified answers from your documents, Groq for text, Qwen 3.
 
     streamlit run app.py
 
-Pages: Workspace (Chat, Documents, Validate) · Operations (Dashboard, Ingestion, Retrieval debugger,
+Pages: Start here (Guide & Test Lab) · Workspace (Chat, Documents, Validate) · Operations (Dashboard, Ingestion, Retrieval debugger,
 Agent traces, Evaluation, Analytics) · Administration (Settings, Models, Security, Users & roles, Audit log)
 """
 from __future__ import annotations
@@ -42,7 +42,10 @@ def main() -> None:
     from ui import admin_pages
 
     who = state.principal()
+    from ui.guide import guide_page
+
     nav = {
+        "guide": st.Page(guide_page, title="Guide & Test Lab", icon="🎓", url_path="guide"),
         "chat": st.Page(pages.chat_page, title="Chat", icon="💬", url_path="chat", default=True),
         "library": st.Page(pages.library_page, title="Documents", icon="📚", url_path="library"),
         "validate": st.Page(pages.validate_page, title="Validate", icon="✅", url_path="validate"),
@@ -54,7 +57,7 @@ def main() -> None:
         "insights": st.Page(pages.insights_page, title="Analytics", icon="📊", url_path="insights"),
         "settings": st.Page(pages.settings_page, title="Settings", icon="⚙️", url_path="settings"),
     }
-    sections = {"Workspace": ["chat", "library", "validate"],
+    sections = {"Start here": ["guide"], "Workspace": ["chat", "library", "validate"],
                 "Operations": ["dashboard", "ingestion", "retrieval", "traces", "evaluation", "insights"],
                 "Administration": ["settings"]}
     for key, fn, title, icon, perm in [("models", admin_pages.models_page, "Models", "🤖", "manage_models"),

@@ -106,3 +106,14 @@ def test_api_end_to_end_isolation(two_tenants):
     assert any(a["action"] == "input_blocked" for a in c.get("/v1/audit", headers=tok("a_admin")).json())
     dbg = c.post("/v1/retrieval/debug", json={"query": "launch code", "mode": "hybrid"}, headers=g).json()
     assert dbg["hits"] == []
+
+
+def test_viewer_cannot_upload_anywhere(make_settings, server):
+    from core.service import Principal
+    from ingestion.validation import IngestionError
+    s = make_settings(auth_mode="users")
+    svc = IngestionService(s)
+    with pytest.raises(IngestionError, match="not allowed to upload"):
+        svc.ingest(b"Some text about pumps.", "x.txt", Principal("v1", "t1", ("viewer",)))
+    assert "upload_denied" in [e.action for e in svc.repo.list_audit("t1")]
+    assert svc.ingest(b"Some text about pumps.", "x.txt", Principal("e1", "t1", ("editor",))).status == "new"
